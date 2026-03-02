@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DOZI Pro | Invoice Manager</title>
+    
+    <!-- Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Arabic:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'Noto Sans Arabic', 'sans-serif'] },
+                    colors: {
+                        brand: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 800: '#3730a3', 900: '#312e81' }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { font-family: 'Inter', 'Noto Sans Arabic', sans-serif; -webkit-tap-highlight-color: transparent; }
+        input::placeholder { font-family: 'Inter', 'Noto Sans Arabic', sans-serif; opacity: 0.6; }
+        
+        .glass { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.2); }
+        .dark .glass { background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(255, 255, 255, 0.05); }
+
+        .nav-item { transition: all 0.2s; }
+        .nav-item.active { color: #4f46e5; background: rgba(79, 70, 229, 0.1); }
+        .nav-item:not(.active) { color: #94a3b8; }
+
+        .suggestions-list { 
+            position: absolute; top: 100%; left: 0; z-index: 100; width: 100%; max-height: 200px; 
+            overflow-y: auto; background: white; border: 1px solid #e2e8f0; 
+            border-radius: 0 0 0.5rem 0.5rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); 
+        }
+        .dark .suggestions-list { background: #1e293b; border-color: #475569; color: #e2e8f0; }
+        .suggestion-item { padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
+        .suggestion-item:last-child { border-bottom: none; }
+        .suggestion-item:hover { background-color: #f1f5f9; }
+        .dark .suggestion-item:hover { background-color: #334155; }
+
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    </style>
+</head>
+<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 min-h-screen pb-20 transition-colors duration-300">
+
+    <!-- Top Header -->
+    <header class="sticky top-0 z-40 glass border-b border-slate-200 dark:border-slate-700 no-print">
+        <div class="max-w-7xl mx-auto px-4 h-14 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <div class="bg-brand-600 text-white p-1.5 rounded-lg shadow">
+                    <i class="fas fa-bolt-lightning text-sm"></i>
+                </div>
+                <span class="text-xl font-black tracking-tighter text-slate-800 dark:text-white uppercase">DOZI</span>
+            </div>
+            <button onclick="toggleDarkMode()" class="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                <i class="fas fa-moon dark:hidden text-slate-500 text-sm"></i>
+                <i class="fas fa-sun hidden dark:block text-yellow-400 text-sm"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="max-w-7xl mx-auto px-4 py-4">
+        
+        <!-- Dashboard Section -->
+        <section id="section-dashboard" class="space-y-4">
+            <h1 class="text-2xl font-bold mb-2">Dashboard</h1>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="glass rounded-xl p-4 shadow-sm border-l-4 border-green-500">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Total Collected</p>
+                    <h3 class="text-lg font-bold mt-1" id="stat-paid">0 IQD</h3>
+                </div>
+                <div class="glass rounded-xl p-4 shadow-sm border-l-4 border-red-500">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Total Remaining</p>
+                    <h3 class="text-lg font-bold mt-1" id="stat-unpaid">0 IQD</h3>
+                </div>
+            </div>
+            <div class="glass rounded-xl p-4 shadow-sm">
+                <h3 class="font-semibold text-sm mb-3 text-slate-600 dark:text-slate-300">Recent Activity</h3>
+                <div id="dash-recent-list" class="space-y-2">
+                    <p class="text-center text-slate-400 text-xs py-4">Loading...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Create Invoice Section -->
+        <section id="section-create" class="hidden space-y-4">
+            <div class="flex justify-between items-center mb-2">
+                <div>
+                    <h1 class="text-2xl font-bold">New Invoice</h1>
+                    <p class="text-slate-500 text-xs" id="display-date"></p>
+                </div>
+                <div class="text-right">
+                    <span class="text-xs text-slate-500 font-mono block" id="display-inv-number"></span>
+                </div>
+            </div>
+
+            <!-- Customer Card -->
+            <div class="glass rounded-xl p-4 shadow-sm space-y-3">
+                <input type="text" id="cust-name" placeholder="Customer Name / اسم الزبون" class="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-slate-800 border dark:border-slate-600 focus:ring-2 focus:ring-brand-500 outline-none text-sm">
+                <input type="tel" id="cust-phone" placeholder="Phone Number / رقم الهاتف" class="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-slate-800 border dark:border-slate-600 focus:ring-2 focus:ring-brand-500 outline-none text-sm">
+            </div>
+
+            <!-- Product Table -->
+            <div class="glass rounded-xl p-4 shadow-sm">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="font-semibold text-sm">Items</h3>
+                    <button onclick="addProductRow()" class="text-brand-600 text-xs font-bold flex items-center gap-1"><i class="fas fa-plus"></i> Add</button>
+                </div>
+                <div id="product-rows" class="space-y-3"></div>
+            </div>
+
+            <!-- Summary & Payment -->
+            <div class="glass rounded-xl p-4 shadow-sm space-y-3">
+                <h3 class="font-semibold text-sm border-b dark:border-slate-700 pb-2">Summary & Payment</h3>
+                
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-500">Subtotal</span>
+                        <span id="subtotal-val" class="font-medium">0</span>
+                    </div>
+                    <div class="flex justify-between items-center gap-4">
+                        <span class="text-slate-500">Discount %</span>
+                        <input type="number" id="discount-val" value="0" oninput="calculateAll()" class="w-16 text-right px-2 py-1 border rounded-lg dark:bg-slate-800 dark:border-slate-600 outline-none text-sm">
+                    </div>
+                    <div class="flex justify-between items-center border-t dark:border-slate-700 pt-2 mt-2">
+                        <span class="font-bold text-base">Total</span>
+                        <span class="font-bold text-lg text-brand-600" id="final-total">0 IQD</span>
+                    </div>
+                </div>
+
+                <!-- Payment Section -->
+                <div class="pt-3 border-t dark:border-slate-700 space-y-2 text-sm">
+                    <div class="flex justify-between items-center gap-4 bg-green-50 dark:bg-green-900/20 -mx-2 px-2 py-2 rounded-lg">
+                        <label class="text-green-700 dark:text-green-300 font-medium">Paid Amount</label>
+                        <div class="flex items-center">
+                            <input type="number" id="paid-amount" value="0" oninput="calculateAll()" class="w-24 text-right px-2 py-1 border border-green-300 rounded-lg dark:bg-slate-800 dark:border-green-600 outline-none text-sm font-bold text-green-600">
+                            <span class="text-xs ml-1 text-slate-400">IQD</span>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center font-bold text-red-600 dark:text-red-400">
+                        <span>Remaining</span>
+                        <span id="remaining-amount">0 IQD</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="grid grid-cols-2 gap-3 pt-2">
+                <button onclick="saveInvoice()" class="col-span-2 bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 rounded-xl shadow flex items-center justify-center gap-2">
+                    <i class="fas fa-save"></i> Save Invoice
+                </button>
+                <button onclick="generatePDF()" class="bg-white dark:bg-slate-800 border dark:border-slate-700 text-slate-700 font-medium py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm">
+                    <i class="fas fa-file-pdf text-red-500"></i> PDF
+                </button>
+                <button onclick="window.print()" class="bg-white dark:bg-slate-800 border dark:border-slate-700 text-slate-700 font-medium py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm">
+                    <i class="fas fa-print text-blue-500"></i> Print
+                </button>
+            </div>
+        </section>
+
+        <!-- History Section -->
+        <section id="section-history" class="hidden space-y-4">
+            <div class="flex justify-between items-center">
+                <h1 class="text-2xl font-bold">History</h1>
+                <button onclick="loadInvoices()" class="text-brand-600 text-xs font-bold"><i class="fas fa-sync-alt"></i> Refresh</button>
+            </div>
+            <div class="glass rounded-xl p-2 flex gap-2">
+                <input type="text" id="search-history" placeholder="Search..." oninput="renderHistory()" class="flex-1 px-3 py-2 rounded-lg bg-transparent outline-none text-sm">
+                <select id="filter-status" onchange="renderHistory()" class="px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 outline-none text-sm font-medium">
+                    <option value="all">All</option>
+                    <option value="paid">Paid</option>
+                    <option value="partial">Partial</option>
+                    <option value="unpaid">Unpaid</option>
+                </select>
+            </div>
+            <div id="history-list" class="space-y-2">
+                <p class="text-center text-slate-400 text-xs py-4">Loading...</p>
+            </div>
+        </section>
+
+        <!-- Settings Section -->
+        <section id="section-settings" class="hidden space-y-4">
+            <h1 class="text-2xl font-bold">Settings</h1>
+            <div class="glass rounded-xl p-4 shadow-sm space-y-3">
+                <label class="text-xs font-bold text-slate-500 uppercase">API Configuration</label>
+                <input type="text" id="api-url" placeholder="Google Script Web App URL" class="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-slate-800 border dark:border-slate-600 outline-none text-xs font-mono">
+                <button onclick="saveApiUrl()" class="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium w-full">Update API URL</button>
+            </div>
+
+            <div class="glass rounded-xl p-4 shadow-sm space-y-3">
+                <label class="text-xs font-bold text-slate-500 uppercase">Business Info</label>
+                <input type="text" id="set-company-name" placeholder="Company Name" class="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-slate-800 border dark:border-slate-600 outline-none text-sm">
+                <input type="text" id="set-address" placeholder="Address" class="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-slate-800 border dark:border-slate-600 outline-none text-sm">
+                 <button onclick="saveSettings()" class="bg-slate-800 dark:bg-white dark:text-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium w-full">Save Profile</button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="fixed bottom-0 left-0 right-0 z-50 glass border-t border-slate-200 dark:border-slate-700 no-print">
+        <div class="flex justify-around items-center h-16 max-w-lg mx-auto">
+            <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-item active flex flex-col items-center justify-center w-full h-full rounded-lg">
+                <i class="fas fa-home text-lg mb-1"></i>
+                <span class="text-xs font-medium">Home</span>
+            </button>
+            <button onclick="switchTab('create')" id="nav-create" class="nav-item flex flex-col items-center justify-center w-full h-full rounded-lg">
+                <i class="fas fa-plus-circle text-lg mb-1"></i>
+                <span class="text-xs font-medium">Invoice</span>
+            </button>
+            <button onclick="switchTab('history')" id="nav-history" class="nav-item flex flex-col items-center justify-center w-full h-full rounded-lg">
+                <i class="fas fa-history text-lg mb-1"></i>
+                <span class="text-xs font-medium">History</span>
+            </button>
+            <button onclick="switchTab('settings')" id="nav-settings" class="nav-item flex flex-col items-center justify-center w-full h-full rounded-lg">
+                <i class="fas fa-cog text-lg mb-1"></i>
+                <span class="text-xs font-medium">Settings</span>
+            </button>
+        </div>
+    </nav>
+
+    <script>
+        // --- Configuration & State ---
+        let API_URL = 'https://script.google.com/macros/s/AKfycbwYq26VnewxAvaaKgboFxv5fRqdPd4EBW9RL832u7gBQljDxDN-Qd3Pkvb1JMWohjbi/exec';
+        let invoices = [];
+        let stockData = []; 
+        let settings = JSON.parse(localStorage.getItem('appSettings')) || { companyName: 'DOZI Company', address: '' };
+        let currentInvoiceId = null;
+        
+        const { jsPDF } = window.jspdf;
+
+        // --- Initialization ---
+        window.onload = () => {
+            initDarkMode();
+            resetForm();
+            loadSettings();
+            loadInvoices();
+            loadStock();
+        };
+
+        // --- UI Logic ---
+        function switchTab(tab) {
+            document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
+            document.getElementById(`section-${tab}`).classList.remove('hidden');
+            document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+            document.getElementById(`nav-${tab}`).classList.add('active');
+            if (tab === 'history') renderHistory();
+            if (tab === 'dashboard') updateDashboard();
+        }
+
+        function toggleDarkMode() {
+            document.documentElement.classList.toggle('dark');
+            localStorage.setItem('darkMode', document.documentElement.classList.contains('dark'));
+        }
+
+        function initDarkMode() {
+            if (localStorage.getItem('darkMode') === 'true') document.documentElement.classList.add('dark');
+        }
+
+        // --- Invoice Form Logic ---
+        function resetForm() {
+            currentInvoiceId = null;
+            invoiceData = { id: 'INV-' + Math.floor(Math.random() * 900000 + 100000), date: new Date().toLocaleDateString('en-GB') };
+            
+            document.getElementById('display-date').innerText = invoiceData.date;
+            document.getElementById('display-inv-number').innerText = invoiceData.id;
+            document.getElementById('cust-name').value = '';
+            document.getElementById('cust-phone').value = '';
+            document.getElementById('product-rows').innerHTML = '';
+            document.getElementById('discount-val').value = '0';
+            document.getElementById('paid-amount').value = '0'; // Reset Paid
+            
+            addProductRow();
+            calculateAll();
+        }
+
+        function addProductRow(data = null) {
+            const container = document.getElementById('product-rows');
+            const div = document.createElement('div');
+            div.className = "bg-slate-50 dark:bg-slate-800/50 rounded-lg p-2 relative";
+            div.innerHTML = `
+                <div class="flex gap-2 items-center">
+                    <div class="flex-1 relative">
+                        <input type="text" value="${data ? data.name : ''}" placeholder="Start typing product..." 
+                               class="item-name w-full bg-transparent outline-none text-sm font-medium mb-1 border-b dark:border-slate-600 pb-1" 
+                               oninput="showSuggestions(this)" autocomplete="off">
+                        <div class="suggestions-list hidden"></div>
+                        <div class="flex gap-2 mt-1">
+                            <input type="number" value="${data ? data.qty : 1}" placeholder="Qty" class="item-qty w-1/3 bg-transparent outline-none text-xs border rounded px-1 py-0.5 text-center dark:border-slate-600" oninput="calculateAll()">
+                            <input type="number" value="${data ? data.price : ''}" placeholder="Price IQD" class="item-price w-2/3 bg-transparent outline-none text-xs border rounded px-1 py-0.5 text-right dark:border-slate-600" oninput="calculateAll()">
+                        </div>
+                    </div>
+                    <button onclick="this.closest('div.bg-slate-50').remove(); calculateAll();" class="text-red-400 hover:text-red-600 p-2"><i class="fas fa-trash-alt text-xs"></i></button>
+                </div>
+            `;
+            container.appendChild(div);
+        }
+
+        // --- Stock Logic (Same as before) ---
+        async function loadStock() {
+            if (!API_URL) return;
+            try {
+                const response = await fetch(`${API_URL}?action=getStock&t=${new Date().getTime()}`);
+                const data = await response.json();
+                if (data.status === 'success' && Array.isArray(data.stock)) {
+                    stockData = data.stock;
+                    localStorage.setItem('stock_cache', JSON.stringify(stockData));
+                } else { throw new Error("Invalid data"); }
+            } catch (e) {
+                stockData = JSON.parse(localStorage.getItem('stock_cache')) || [];
+            }
+        }
+
+        function showSuggestions(inputElement) {
+            const val = inputElement.value.toLowerCase();
+            const list = inputElement.nextElementSibling;
+            if (!list) return;
+            if (!val) { list.classList.add('hidden'); return; }
+            if (!Array.isArray(stockData)) return;
+            
+            const matches = stockData.filter(p => p.name && p.name.toLowerCase().includes(val)).slice(0, 6);
+            if (matches.length === 0) { list.classList.add('hidden'); return; }
+
+            list.innerHTML = matches.map(p => `
+                <div class="suggestion-item" onclick="selectProduct(this, '${p.name.replace(/'/g, "\\'")}', ${p.price})">
+                    <span class="font-medium">${p.name}</span>
+                    <span class="text-brand-500 font-bold text-xs">${p.price} IQD</span>
+                </div>
+            `).join('');
+            list.classList.remove('hidden');
+        }
+
+        function selectProduct(element, name, price) {
+            const row = element.closest('.bg-slate-50');
+            row.querySelector('.item-name').value = name;
+            row.querySelector('.item-price').value = price;
+            const list = row.querySelector('.suggestions-list');
+            if(list) list.classList.add('hidden');
+            calculateAll();
+        }
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.classList.contains('item-name')) {
+                document.querySelectorAll('.suggestions-list').forEach(l => l.classList.add('hidden'));
+            }
+        });
+
+        // --- Calculations (Updated with Payment) ---
+        function calculateAll() {
+            let sub = 0;
+            const rows = document.querySelectorAll('#product-rows > div');
+            
+            rows.forEach(row => {
+                const q = parseFloat(row.querySelector('.item-qty').value) || 0;
+                const p = parseFloat(row.querySelector('.item-price').value) || 0;
+                sub += q * p;
+            });
+
+            const disc = parseFloat(document.getElementById('discount-val').value) || 0;
+            const total = sub - (sub * disc / 100);
+            
+            // Payment Logic
+            const paid = parseFloat(document.getElementById('paid-amount').value) || 0;
+            const remaining = total - paid;
+
+            document.getElementById('subtotal-val').innerText = formatIQD(sub);
+            document.getElementById('final-total').innerText = formatIQD(total);
+            document.getElementById('remaining-amount').innerText = formatIQD(remaining);
+            
+            // Visual cue for remaining
+            const remEl = document.getElementById('remaining-amount');
+            if (remaining <= 0) {
+                remEl.classList.remove('text-red-600', 'dark:text-red-400');
+                remEl.classList.add('text-green-600', 'dark:text-green-400');
+            } else {
+                remEl.classList.add('text-red-600', 'dark:text-red-400');
+                remEl.classList.remove('text-green-600', 'dark:text-green-400');
+            }
+
+            invoiceData.subtotal = sub;
+            invoiceData.total = total;
+            invoiceData.paidAmount = paid; // Store for saving
+        }
+
+        function formatIQD(val) {
+            return new Intl.NumberFormat('en-IQ').format(Math.round(val)) + " IQD";
+        }
+
+        function getItems() {
+            const items = [];
+            document.querySelectorAll('#product-rows > div').forEach(row => {
+                const name = row.querySelector('.item-name').value;
+                const qty = row.querySelector('.item-qty').value;
+                const price = row.querySelector('.item-price').value;
+                if (name) items.push({ name, qty, price, total: qty * price });
+            });
+            return items;
+        }
+
+        // --- Backend Integration ---
+        function saveApiUrl() {
+            const url = document.getElementById('api-url').value;
+            if(url) {
+                localStorage.setItem('api_url', url);
+                API_URL = url;
+                showToast("API URL Updated!");
+                loadInvoices(); 
+                loadStock();
+            }
+        }
+
+        async function loadInvoices() {
+            if (!API_URL) return;
+            try {
+                const response = await fetch(`${API_URL}?action=getAll&t=${new Date().getTime()}`);
+                const data = await response.json();
+                if (data.status === 'success') {
+                    invoices = data.invoices || [];
+                    localStorage.setItem('invoices_cache', JSON.stringify(invoices));
+                }
+            } catch (e) {
+                console.error("Load Error:", e);
+                invoices = JSON.parse(localStorage.getItem('invoices_cache')) || [];
+            }
+            renderHistory();
+            updateDashboard();
+        }
+
+        async function saveInvoice() {
+            if (!API_URL) {
+                Swal.fire('Error', 'API URL is missing.', 'error');
+                return;
+            }
+
+            // Calculate remaining for status logic
+            const total = invoiceData.total;
+            const paid = parseFloat(document.getElementById('paid-amount').value) || 0;
+
+            const invoice = {
+                id: currentInvoiceId || invoiceData.id,
+                date: invoiceData.date,
+                customer: document.getElementById('cust-name').value || 'Customer',
+                phone: document.getElementById('cust-phone').value,
+                items: getItems(),
+                subtotal: invoiceData.subtotal,
+                total: total,
+                discount: document.getElementById('discount-val').value,
+                paidAmount: paid, // Send new field
+                notes: '',
+                createdAt: new Date().getTime()
+            };
+
+            Swal.fire({ title: 'Saving...', allowOutsideClick: false, didOpen: () => { Swal.showLoading() }});
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    mode: 'cors',
+                    headers: { 'Content-Type': 'text/plain' }, 
+                    body: JSON.stringify(invoice)
+                });
+
+                const result = await response.json();
+                Swal.close();
+
+                if (result.status === 'success') {
+                    showToast("Invoice Saved!");
+                    loadInvoices(); 
+                    switchTab('history');
+                    resetForm();
+                } else {
+                    throw new Error(result.message);
+                }
+            } catch (e) {
+                Swal.fire('Error', 'Connection failed: ' + e.message, 'error');
+            }
+        }
+
+        // --- Render Logic ---
+        function renderHistory() {
+            const container = document.getElementById('history-list');
+            const search = document.getElementById('search-history').value.toLowerCase();
+            const filter = document.getElementById('filter-status').value;
+            
+            let filtered = invoices.filter(inv => {
+                const matchSearch = inv.customer.toLowerCase().includes(search);
+                const matchStatus = filter === 'all' || inv.status === filter;
+                return matchSearch && matchStatus;
+            });
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="p-8 text-center text-slate-400 text-xs">No invoices found.</div>`;
+                return;
+            }
+
+            container.innerHTML = filtered.map(inv => {
+                // Determine badge color based on new status
+                let statusClass = 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'; // unpaid
+                if (inv.status === 'paid') statusClass = 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+                if (inv.status === 'partial') statusClass = 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400';
+                
+                const remaining = inv.total - (inv.paidAmount || 0);
+
+                return `
+                <div class="glass rounded-xl p-3 shadow-sm flex justify-between items-center">
+                    <div class="flex-1">
+                        <h4 class="font-bold text-sm">${inv.customer}</h4>
+                        <p class="text-xs text-slate-500">${inv.id} • ${inv.date}</p>
+                        <p class="text-sm font-bold mt-1 text-brand-600">${formatIQD(inv.total)}</p>
+                        ${remaining > 0 ? `<p class="text-xs text-red-500 font-medium">Rem: ${formatIQD(remaining)}</p>` : ''}
+                    </div>
+                    <div class="text-right flex flex-col items-end justify-between h-full gap-2">
+                        <span class="px-2 py-0.5 rounded text-xs font-bold ${statusClass}">
+                            ${inv.status.toUpperCase()}
+                        </span>
+                        <button onclick="editInvoice('${inv.id}')" class="text-blue-500 text-xs"><i class="fas fa-edit"></i></button>
+                    </div>
+                </div>
+            `}).join('');
+        }
+
+        function updateDashboard() {
+            let collected = 0, remaining = 0;
+            invoices.forEach(inv => {
+                const paid = inv.paidAmount || 0;
+                collected += paid;
+                remaining += (inv.total - paid);
+            });
+            document.getElementById('stat-paid').innerText = formatIQD(collected);
+            document.getElementById('stat-unpaid').innerText = formatIQD(remaining);
+            
+            const recent = invoices.slice(0, 5);
+            document.getElementById('dash-recent-list').innerHTML = recent.map(inv => `
+                 <div class="flex justify-between items-center p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <div>
+                        <h4 class="font-medium text-sm">${inv.customer}</h4>
+                        <p class="text-xs text-slate-400">${inv.date}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-bold text-sm">${formatIQD(inv.total)}</p>
+                        <p class="text-xs ${inv.status === 'paid' ? 'text-green-500' : 'text-red-500'}">${inv.status}</p>
+                    </div>
+                </div>
+            `).join('') || '<p class="text-center text-slate-400 text-xs py-4">No data yet</p>';
+        }
+
+        function editInvoice(id) {
+            const inv = invoices.find(i => i.id === id);
+            if(!inv) return;
+            
+            currentInvoiceId = id;
+            document.getElementById('display-inv-number').innerText = inv.id;
+            document.getElementById('cust-name').value = inv.customer;
+            document.getElementById('cust-phone').value = inv.phone || '';
+            document.getElementById('discount-val').value = inv.discount || 0;
+            document.getElementById('paid-amount').value = inv.paidAmount || 0; // Load Paid
+            document.getElementById('product-rows').innerHTML = '';
+            
+            inv.items.forEach(item => addProductRow(item));
+            calculateAll();
+            
+            switchTab('create');
+        }
+
+        // --- PDF Generation (Updated) ---
+        async function generatePDF() {
+            const element = document.createElement('div');
+            element.style.width = '800px';
+            element.style.padding = '40px';
+            element.style.fontFamily = 'Inter, Noto Sans Arabic, sans-serif';
+            element.style.backgroundColor = 'white';
+            element.style.color = 'black';
+            
+            const invId = document.getElementById('display-inv-number').innerText;
+            const cust = document.getElementById('cust-name').value || 'Customer';
+            const date = document.getElementById('display-date').innerText;
+            const items = getItems();
+            const paid = document.getElementById('paid-amount').value;
+            const remaining = document.getElementById('remaining-amount').innerText;
+
+            element.innerHTML = `
+                <div style="display:flex; justify-content:space-between; border-bottom:2px solid #eee; padding-bottom:20px; margin-bottom:20px;">
+                    <div>
+                        <h1 style="color:#4f46e5; font-size:24px; margin:0;">${settings.companyName}</h1>
+                        <p style="color:#666; font-size:12px;">${settings.address}</p>
+                    </div>
+                    <div style="text-align:right;">
+                        <h2 style="margin:0; font-size:30px; color:#333;">INVOICE</h2>
+                        <p style="font-size:12px; color:#666;">${invId}</p>
+                        <p style="font-size:12px; color:#666;">${date}</p>
+                    </div>
+                </div>
+                <div style="margin-bottom:20px;">
+                    <h3 style="font-size:14px; color:#888;">BILL TO</h3>
+                    <p style="font-size:18px; font-weight:bold; margin:0;">${cust}</p>
+                </div>
+                <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+                    <thead>
+                        <tr style="background:#f8fafc; border-bottom:2px solid #eee;">
+                            <th style="text-align:left; padding:10px; font-size:12px;">Item</th>
+                            <th style="text-align:center; padding:10px; font-size:12px;">Qty</th>
+                            <th style="text-align:right; padding:10px; font-size:12px;">Price (IQD)</th>
+                            <th style="text-align:right; padding:10px; font-size:12px;">Total (IQD)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${items.map(i => `
+                            <tr style="border-bottom:1px solid #eee;">
+                                <td style="padding:10px;">${i.name}</td>
+                                <td style="padding:10px; text-align:center;">${i.qty}</td>
+                                <td style="padding:10px; text-align:right;">${new Intl.NumberFormat('en-IQ').format(i.price)}</td>
+                                <td style="padding:10px; text-align:right;">${new Intl.NumberFormat('en-IQ').format(i.total)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <div style="display:flex; justify-content:flex-end;">
+                    <div style="width:250px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>Subtotal</span><span>${document.getElementById('subtotal-val').innerText}</span></div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:5px; border-top:1px solid #eee; padding-top:5px;"><span>Total</span><span>${document.getElementById('final-total').innerText}</span></div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:5px; color:green;"><span>Paid</span><span>${formatIQD(paid)}</span></div>
+                        <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:16px; border-top:2px solid #333; margin-top:5px; padding-top:5px; color:red;">
+                            <span>Remaining</span>
+                            <span>${remaining}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(element);
+            const canvas = await html2canvas(element, { scale: 2 });
+            const imgData = canvas.toDataURL('image/png');
+            
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const imgProps=pdf.getImageProperties(imgData);
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+            
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            pdf.save(`Invoice_${invId}.pdf`);
+            
+            document.body.removeChild(element);
+        }
+
+        function saveSettings() {
+            settings.companyName = document.getElementById('set-company-name').value;
+            settings.address = document.getElementById('set-address').value;
+            localStorage.setItem('appSettings', JSON.stringify(settings));
+            showToast("Settings Saved");
+        }
+        
+        function loadSettings() {
+            document.getElementById('set-company-name').value = settings.companyName;
+            document.getElementById('set-address').value = settings.address;
+            document.getElementById('api-url').value = API_URL;
+        }
+
+        function showToast(m) {
+            Swal.fire({ toast: true, position: 'bottom', icon: 'success', title: m, showConfirmButton: false, timer: 1500, background: '#1e293b', color: '#fff' });
+        }
+    </script>
+</body>
+</html>
